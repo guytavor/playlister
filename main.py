@@ -1,9 +1,12 @@
 import json
 import os
+import subprocess
 
 import openai
 import spotipy
-from loguru import logger
+from termcolor import colored
+
+TOKEN_FILE = "creds/access_token.txt"
 
 
 def generate_playlist(playlist_description):
@@ -27,7 +30,6 @@ Use the following JSON format:
 """
 
     # Call the GPT-4 model to generate a response
-    logger.info("Calling GPT")
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo-0613",  # Set the model
         messages=[
@@ -47,12 +49,12 @@ Use the following JSON format:
 
 def setup_spotify():
     # Read access token from creds/access_token.txt
-    with open("creds/access_token.txt", "r") as f:
+    with open(TOKEN_FILE, "r") as f:
         access_token = f.read()
         return spotipy.Spotify(auth=access_token)
 
 
-def play_playlist(sp, playlist):
+def play_playlist(sp, playlist, device_id):
     track_uris = []
 
     # Fetch URIs of the tracks
@@ -61,30 +63,45 @@ def play_playlist(sp, playlist):
         if results['tracks']['items']:
             track_uris.append(results['tracks']['items'][0]['uri'])
 
-    # List available devices
-    devices = sp.devices()
-    for i, device in enumerate(devices['devices']):
-        print(f"{i + 1}: {device['name']} ({device['id']})")
-
-    # Let the user select a device
-    device_index = int(input("Select a device by number: ")) - 1
-    device_id = devices['devices'][device_index]['id']
-
     # Start playback on the selected device
     if track_uris:
         sp.start_playback(device_id=device_id, uris=track_uris)
 
 
 def main():
+    # if token file does not exist
+    if not os.path.exists(TOKEN_FILE):
+        print(colored("Please run sp_auth.py first to authenticate with Spotify", "red", attrs=["bold"]))
+        exit(1)
     sp = setup_spotify()
-    devices = sp.devices()
 
     # Ask the user for their desired playlist
-    playlist_description = input("Enter a description for the playlist you want: ")
+    playlist_description = input("Enter a description for the playlist you want:\n")
 
-    # Generate the playlist and print it
+    print(colored("Opening your spotify desktop app", "yellow", attrs=["bold"]))
+    command = "/Applications/Spotify.app/Contents/MacOS/Spotify"
+    subprocess.Popen(command)
+
+    print(colored("Generating playlist...", "yellow", attrs=["bold"]))
     playlist = generate_playlist(playlist_description)
-    play_playlist(sp, playlist)
+
+    print(colored("Playlist generated:", "green"))
+    text_list = playlist_json_to_text(playlist)
+    print(colored(text_list, "yellow"))
+
+    devices = sp.devices()
+    device_id = devices['devices'][0]['id']  # get the first device
+
+    print(colored("\n\nPlaying...", "yellow", attrs=["bold"]))
+
+    play_playlist(sp, playlist, device_id)
+
+
+def playlist_json_to_text(playlist):
+    text_list = ""
+    for i, song in enumerate(playlist["playlist"], start=1):
+        text_list += f"{i}. {song['song_name']} by {song['artist_name']}\n"
+    return text_list
 
 
 # Press the green button in the gutter to run the script.
