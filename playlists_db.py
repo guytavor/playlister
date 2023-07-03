@@ -34,6 +34,12 @@ class PlaylistManager:
     def list_playlists(self):
         return list(self.recent_playlists)
 
+    def get_playlist_name(self, index):
+        if index < 0 or index >= len(self.recent_playlists):
+            return None
+
+        return self.recent_playlists[index]
+
     def load_playlist(self, index):
         if index < 0 or index >= len(self.recent_playlists):
             return None

@@ -6,12 +6,56 @@ import openai
 import spotipy
 from termcolor import colored
 
+import sp_auth
 from playlists_db import PlaylistManager
 
 TOKEN_FILE = "creds/access_token.txt"
 
 
-def generate_playlist(playlist_description):
+def play_playlist(sp, tracks_list, device_id, playlist_name):
+    """
+    Play a playlist on the given device using the Spotify API.
+    If the given 'playlist_name' does not exist in the user's playlists, it will be created.
+    if it does exist, it will just be played.
+    :param sp:
+    :param tracks_list: the playlist json
+    :param device_id:
+    :param playlist_name: the name of the playlist the user gave
+    """
+    # Get the user's playlists
+    playlists = sp.current_user_playlists()
+
+    # Check if playlist with the given name already exists
+    playlist_id = None
+    for item in playlists['items']:
+        if item['name'] == playlist_name:
+            playlist_id = item['id']
+            break
+
+    user_id = sp.me()['id']
+
+    # If no existing playlist is found, create a new one
+    if playlist_id is None:
+        track_uris = []
+        for track in tracks_list["playlist"]:
+            results = sp.search(q='track:{} artist:{}'.format(track['song_name'], track['artist_name']), type='track')
+            if results['tracks']['items']:
+                track_uris.append(results['tracks']['items'][0]['uri'])
+        print(colored(f"Creating playlist {playlist_name} with {len(track_uris)} tracks", "yellow"))
+        playlist = sp.user_playlist_create(user=user_id, name=playlist_name)
+        playlist_id = playlist['id']
+        sp.user_playlist_replace_tracks(user=user_id, playlist_id=playlist_id, tracks=track_uris)
+
+    # Start playback on the selected device for the given playlist
+    sp.start_playback(device_id=device_id, context_uri=f'spotify:playlist:{playlist_id}')
+
+
+def generate_tracks_list(playlist_description) -> json:
+    """
+    Generate a list of tracks based on the user's 'playlist_description' using GPT
+    :param playlist_description:
+    :return: a JSON describing the tracks list
+    """
     # Get the OpenAI API key from the environment
     api_key = os.getenv("OPENAI_API_KEY")
 
@@ -51,51 +95,26 @@ Use the following JSON format:
 
 def setup_spotify():
     # Read access token from creds/access_token.txt
+    # to generate this file, run sp_auth.py
     with open(TOKEN_FILE, "r") as f:
         access_token = f.read()
         return spotipy.Spotify(auth=access_token)
 
 
-def play_playlist(sp, playlist, device_id):
-    track_uris = []
-
-    # Fetch URIs of the tracks
-    for track in playlist["playlist"]:
-        results = sp.search(q='track:{} artist:{}'.format(track['song_name'], track['artist_name']), type='track')
-        if results['tracks']['items']:
-            track_uris.append(results['tracks']['items'][0]['uri'])
-
-    # Start playback on the selected device
-    if track_uris:
-        sp.start_playback(device_id=device_id, uris=track_uris)
-
-        while True:
-            command = input(
-                "\nEnter 'n' to play the next song, 'c' to display the current track, or 'q' to stop playback: ")
-
-            if command == "n":
-                sp.next_track(device_id=device_id)
-            elif command == "c":
-                current_track = sp.current_playback()
-                if current_track is not None:
-                    print("Currently playing:", current_track["item"]["name"], "by",
-                          current_track["item"]["artists"][0]["name"])
-                else:
-                    print("No track currently playing.")
-            elif command == "q":
-                sp.pause_playback(device_id=device_id)
-                break
+def authorize_spotify():
+    sp_auth.run_flow()
 
 
 def main():
     # if token file does not exist
     if not os.path.exists(TOKEN_FILE):
-        print(colored("Please run sp_auth.py first to authenticate with Spotify", "red", attrs=["bold"]))
+        print(colored("Running authorization flow", "red", attrs=["bold"]))
+        authorize_spotify()
         exit(1)
     sp = setup_spotify()
 
     # Ask the user for their desired playlist
-    pm = PlaylistManager("~/.playlists/")
+    pm = PlaylistManager(os.path.expanduser("~/.playlists"))
     print(colored("Here are your playlists:", "green"))
     playlists = pm.list_playlists()
     for i, playlist in enumerate(playlists, 0):
@@ -111,11 +130,12 @@ def main():
     if playlist_description.isdigit():
         # Load old playlist
         playlist = pm.load_playlist(int(playlist_description))
+        playlist_description = pm.get_playlist_name(int(playlist_description))
         print(colored(f"Loading {playlist_description}...", "yellow", attrs=["bold"]))
     else:
         # Generate new playlist
         print(colored("Generating playlist...", "yellow", attrs=["bold"]))
-        playlist = generate_playlist(playlist_description)
+        playlist = generate_tracks_list(playlist_description)
         pm.save_playlist(playlist_description, playlist)
 
     print(colored("Playing:", "green"))
@@ -128,9 +148,10 @@ def main():
 
         print(colored("\n\nPlaying...", "yellow", attrs=["bold"]))
 
-        play_playlist(sp, playlist, device_id)
-    except spotipy.exceptions.SpotifyException as e:
-        print(colored("Your spotify token has expired, run sp_auth.py", "red", attrs=["bold"]))
+        play_playlist(sp, playlist, device_id, playlist_description)
+    except spotipy.exceptions.SpotifyException:
+        print(colored("Your spotify token has expired, running authorization flow", "red", attrs=["bold"]))
+        authorize_spotify()
 
 
 def playlist_json_to_text(playlist):
