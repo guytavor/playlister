@@ -4,7 +4,6 @@ import os
 import openai
 import spotipy
 from loguru import logger
-from spotipy.oauth2 import SpotifyOAuth
 
 
 def generate_playlist(playlist_description):
@@ -47,14 +46,10 @@ Use the following JSON format:
 
 
 def setup_spotify():
-    # Spotify credentials
-
-    sp = spotipy.Spotify(auth_manager=SpotifyOAuth(username=username,
-                                                   scope=scope,
-                                                   client_id=client_id,
-                                                   client_secret=client_secret,
-                                                   redirect_uri=redirect_uri))
-    return sp
+    # Read access token from creds/access_token.txt
+    with open("creds/access_token.txt", "r") as f:
+        access_token = f.read()
+        return spotipy.Spotify(auth=access_token)
 
 
 def play_playlist(sp, playlist):
@@ -158,6 +153,8 @@ def previous_track():
 
 def main():
     sp = setup_spotify()
+    devices = sp.devices()
+    print(devices)
 
     # # Ask the user for their desired playlist
     # playlist_description = input("Enter a description for the playlist you want: ")
