@@ -1,0 +1,6 @@
+openai
+spotipy
+loguru
+flask
+python-dotenv
+termcolor
