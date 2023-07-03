@@ -7,10 +7,13 @@ from flask import Flask, request
 from spotipy import SpotifyOAuth
 from termcolor import colored
 
+from config import DATA_PATH, ACCESS_TOKEN_FILE, ENV_FILE
+
 app = Flask(__name__)
 
 scope = "user-read-playback-state,user-modify-playback-state,playlist-modify-public,streaming user-modify-playback-state"
-load_dotenv(dotenv_path="creds/.env")
+
+load_dotenv(dotenv_path=ENV_FILE)
 sp_oauth = SpotifyOAuth(client_id=os.getenv("SPOTIFY_CLIENT_ID"),
                         client_secret=os.getenv("SPOTIFY_CLIENT_SECRET"),
                         redirect_uri='http://localhost:8888/callback',
@@ -31,9 +34,9 @@ def callback():
     # Perform further operations with the access token
     access_token = token_info['access_token']
 
-    if not os.path.exists('creds'):
-        os.makedirs('creds')
-    with open('creds/access_token.txt', 'w') as f:
+    if not os.path.exists(DATA_PATH):
+        os.makedirs(DATA_PATH)
+    with open(ACCESS_TOKEN_FILE, 'w') as f:
         f.write(access_token)
 
     print(colored('Authorization successful!', 'green', attrs=['bold']))

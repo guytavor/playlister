@@ -7,9 +7,8 @@ import spotipy
 from termcolor import colored
 
 import sp_auth
+from config import ACCESS_TOKEN_FILE, DATA_PATH
 from playlists_db import PlaylistManager
-
-TOKEN_FILE = "creds/access_token.txt"
 
 
 def play_playlist(sp, tracks_list, device_id, playlist_name):
@@ -96,7 +95,7 @@ Use the following JSON format:
 def setup_spotify():
     # Read access token from creds/access_token.txt
     # to generate this file, run sp_auth.py
-    with open(TOKEN_FILE, "r") as f:
+    with open(ACCESS_TOKEN_FILE, "r") as f:
         access_token = f.read()
         return spotipy.Spotify(auth=access_token)
 
@@ -107,14 +106,14 @@ def authorize_spotify():
 
 def main():
     # if token file does not exist
-    if not os.path.exists(TOKEN_FILE):
+    if not os.path.exists(ACCESS_TOKEN_FILE):
         print(colored("Running authorization flow", "red", attrs=["bold"]))
         authorize_spotify()
         exit(1)
     sp = setup_spotify()
 
     # Ask the user for their desired playlist
-    pm = PlaylistManager(os.path.expanduser("~/.playlists"))
+    pm = PlaylistManager(DATA_PATH)
     print(colored("Here are your playlists:", "green"))
     playlists = pm.list_playlists()
     for i, playlist in enumerate(playlists, 0):
