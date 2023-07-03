@@ -6,6 +6,8 @@ import openai
 import spotipy
 from termcolor import colored
 
+from playlists_db import PlaylistManager
+
 TOKEN_FILE = "creds/access_token.txt"
 
 
@@ -67,6 +69,23 @@ def play_playlist(sp, playlist, device_id):
     if track_uris:
         sp.start_playback(device_id=device_id, uris=track_uris)
 
+        while True:
+            command = input(
+                "\nEnter 'n' to play the next song, 'c' to display the current track, or 'q' to stop playback: ")
+
+            if command == "n":
+                sp.next_track(device_id=device_id)
+            elif command == "c":
+                current_track = sp.current_playback()
+                if current_track is not None:
+                    print("Currently playing:", current_track["item"]["name"], "by",
+                          current_track["item"]["artists"][0]["name"])
+                else:
+                    print("No track currently playing.")
+            elif command == "q":
+                sp.pause_playback(device_id=device_id)
+                break
+
 
 def main():
     # if token file does not exist
@@ -76,25 +95,42 @@ def main():
     sp = setup_spotify()
 
     # Ask the user for their desired playlist
-    playlist_description = input("Enter a description for the playlist you want:\n")
+    pm = PlaylistManager("~/.playlists/")
+    print(colored("Here are your playlists:", "green"))
+    playlists = pm.list_playlists()
+    for i, playlist in enumerate(playlists, 0):
+        print(f"{i}. {playlist}")
+
+    playlist_description = input(
+        colored("\nEnter an playlist number OR a description for a new playlist you want:\n", "green", attrs=["bold"]))
 
     print(colored("Opening your spotify desktop app", "yellow", attrs=["bold"]))
     command = "/Applications/Spotify.app/Contents/MacOS/Spotify"
     subprocess.Popen(command)
 
-    print(colored("Generating playlist...", "yellow", attrs=["bold"]))
-    playlist = generate_playlist(playlist_description)
+    if playlist_description.isdigit():
+        # Load old playlist
+        playlist = pm.load_playlist(int(playlist_description))
+        print(colored(f"Loading {playlist_description}...", "yellow", attrs=["bold"]))
+    else:
+        # Generate new playlist
+        print(colored("Generating playlist...", "yellow", attrs=["bold"]))
+        playlist = generate_playlist(playlist_description)
+        pm.save_playlist(playlist_description, playlist)
 
-    print(colored("Playlist generated:", "green"))
+    print(colored("Playing:", "green"))
     text_list = playlist_json_to_text(playlist)
     print(colored(text_list, "yellow"))
 
-    devices = sp.devices()
-    device_id = devices['devices'][0]['id']  # get the first device
+    try:
+        devices = sp.devices()
+        device_id = devices['devices'][0]['id']  # get the first device
 
-    print(colored("\n\nPlaying...", "yellow", attrs=["bold"]))
+        print(colored("\n\nPlaying...", "yellow", attrs=["bold"]))
 
-    play_playlist(sp, playlist, device_id)
+        play_playlist(sp, playlist, device_id)
+    except spotipy.exceptions.SpotifyException as e:
+        print(colored("Your spotify token has expired, run sp_auth.py", "red", attrs=["bold"]))
 
 
 def playlist_json_to_text(playlist):
