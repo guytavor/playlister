@@ -4,3 +4,4 @@ loguru
 flask
 python-dotenv
 termcolor
+flask-cors
