@@ -61,7 +61,6 @@ def generate_tracks_list(playlist_description) -> json:
     # Set the OpenAI API key
     openai.api_key = api_key
 
-    # Construct the prompt for GPT-4
     prompt = f"""
 {playlist_description}. Generate a list of 15 songs in the format of a JSON with song name and artist name:"
 Use the following JSON format:
@@ -76,7 +75,7 @@ Use the following JSON format:
 
     # Call the GPT-4 model to generate a response
     response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo-0613",  # Set the model
+        model="gpt-4",  # Set the model
         messages=[
             {"role": "system", "content": "You are a knowledgeable AI trained to generate music playlists."},
             {"role": "user", "content": prompt}
