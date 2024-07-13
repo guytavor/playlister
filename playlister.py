@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import json
 import os
 import subprocess
@@ -9,6 +11,13 @@ from termcolor import colored
 import sp_auth
 from config import ACCESS_TOKEN_FILE, DATA_PATH
 from playlists_db import PlaylistManager
+from openai import OpenAI
+
+
+api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=api_key)
+
+openai.api_key = api_key
 
 
 def play_playlist(sp, tracks_list, device_id, playlist_name):
@@ -49,20 +58,15 @@ def play_playlist(sp, tracks_list, device_id, playlist_name):
     sp.start_playback(device_id=device_id, context_uri=f'spotify:playlist:{playlist_id}')
 
 
-def generate_tracks_list(playlist_description) -> json:
+
+def generate_tracks_list(playlist_description: str) -> dict:
     """
     Generate a list of tracks based on the user's 'playlist_description' using GPT
     :param playlist_description:
     :return: a JSON describing the tracks list
     """
-    # Get the OpenAI API key from the environment
-    api_key = os.getenv("OPENAI_API_KEY")
-
-    # Set the OpenAI API key
-    openai.api_key = api_key
-
     prompt = f"""
-{playlist_description}. Generate a list of 15 songs in the format of a JSON with song name and artist name:"
+{playlist_description}. Generate a list of 15 songs in the format of a JSON with song name and artist name:
 Use the following JSON format:
 {{
     "playlist":
@@ -74,16 +78,16 @@ Use the following JSON format:
 """
 
     # Call the GPT-4 model to generate a response
-    response = openai.ChatCompletion.create(
-        model="gpt-4",  # Set the model
+    response = client.chat.completions.create(
+        model="gpt-4",
         messages=[
             {"role": "system", "content": "You are a knowledgeable AI trained to generate music playlists."},
             {"role": "user", "content": prompt}
         ]
     )
 
-    # Extract the assistant's reply (assumes the reply is the last message)
-    assistant_reply = response['choices'][0]['message']['content']
+    # Extract the assistant's reply
+    assistant_reply = response.choices[0].message.content
 
     # Parse JSON and return it
     playlist = json.loads(assistant_reply)
@@ -152,7 +156,7 @@ def main():
         authorize_spotify()
 
 
-def playlist_json_to_text(playlist):
+def playlist_json_to_text(playlist: dict) -> str:
     text_list = ""
     for i, song in enumerate(playlist["playlist"], start=1):
         text_list += f"{i}. {song['song_name']} by {song['artist_name']}\n"
